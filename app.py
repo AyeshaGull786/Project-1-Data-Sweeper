@@ -38,7 +38,7 @@ if uploaded_files:
         if file_ext == ".csv":
             df = pd.read_csv(file)
         elif file_ext == ".xlsx":
-            df = pd.read_excel(file)
+            df = pd.read_excel(file, engine="openpyxl")
         else:
             st.error(f"Unsupported file type: {file_ext}")
             continue
@@ -91,26 +91,27 @@ if uploaded_files:
             buffer = io.BytesIO()
 
             # Ensure this block is inside the 'if st.button()' check
-            if st.button(f"Convert {file.name}"):
+        if st.button(f"Convert {file.name}"):
+            buffer = io.BytesIO()  # Ensure buffer is initialized properly
 
-                if conversion_type == 'CSV':
-                    df.to_csv(buffer, index=False)
-                    file_name = file.name.replace(file_ext, ".csv")
-                    mime_type = "text/csv"
+    if conversion_type == 'CSV':
+        df.to_csv(buffer, index=False)
+        file_name = file.name.replace(file_ext, ".csv")
+        mime_type = "text/csv"
 
-                elif conversion_type == "Excel":
-                    df.to_excel(buffer, index=False)
-                    file_name = file.name.replace(file_ext, ".xlsx")
-                    mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    buffer.seek(0)
+    elif conversion_type == "Excel":
+        df.to_excel(buffer, index=False, engine="openpyxl")  # Ensure engine="openpyxl"
+        file_name = file.name.replace(file_ext, ".xlsx")
+        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-                # Provide download button
-                st.download_button(
-                    label=f"Download {file.name} as {conversion_type}",
-                    data=buffer,
-                    file_name=file_name,
-                    mime=mime_type
-                )
-                st.success(f"File '{file.name}' processed successfully!")
+    buffer.seek(0)  # Ensure buffer is at the beginning
 
-    
+    # Provide download button
+    st.download_button(
+        label=f"Download {file.name} as {conversion_type}",
+        data=buffer,
+        file_name=file_name,
+        mime=mime_type
+    )
+
+    st.success(f"File '{file.name}' processed successfully!")
