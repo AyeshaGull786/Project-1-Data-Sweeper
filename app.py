@@ -4,6 +4,7 @@ import pandas as pd
 import os
 from io import BytesIO
 import io
+import openpyxl
 
 # Now I am setting up my first Python app
 st.set_page_config(page_title="Data Sweeper", layout='wide')
