@@ -1,12 +1,10 @@
-
 import streamlit as st
 import pandas as pd
 import os
-from io import BytesIO
 import io
 import openpyxl
 
-# Now I am setting up my first Python app
+# Set up Streamlit page
 st.set_page_config(page_title="Data Sweeper", layout='wide')
 
 # Custom CSS
@@ -22,98 +20,95 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Data and description
+# App title
 st.title("Data Sweeper")
 st.write("Transform your files between CSV and Excel formats with built-in data cleaning and visualization!")
 
-# File uploader (multiple files upload)
-uploaded_files = st.file_uploader("Upload your files (accepts CSV or Excel):", type=["csv", "xlsx"], accept_multiple_files=True)
+# File uploader (supports multiple files)
+uploaded_files = st.file_uploader("Upload your files (CSV or Excel):", type=["csv", "xlsx"], accept_multiple_files=True)
 
-# Check if files are uploaded
+# Process uploaded files
 if uploaded_files:
     for file in uploaded_files:
-        # Use the file's name attribute, but we need to access it properly
         file_ext = os.path.splitext(file.name)[-1].lower()
 
-        # Check for valid file types and read them accordingly
-        if file_ext == ".csv":
-            df = pd.read_csv(file)
-        elif file_ext == ".xlsx":
-            df = pd.read_excel(file, engine="openpyxl")
-        else:
-            st.error(f"Unsupported file type: {file_ext}")
+        # Read file into DataFrame
+        try:
+            if file_ext == ".csv":
+                df = pd.read_csv(file)
+            elif file_ext == ".xlsx":
+                df = pd.read_excel(file, engine="openpyxl")
+            else:
+                st.error(f"Unsupported file type: {file_ext}")
+                continue
+        except Exception as e:
+            st.error(f"Error reading file {file.name}: {e}")
             continue
 
-        # Display information about the file
-        st.write(f"**File Name:** {file.name}")
-        st.write(f"**File Size:** {file.size / 1024} KB")
-
-        # Show five rows of our data frame (df)
-        st.write("Preview the head of the DataFrame")
+        # Display file information
+        st.subheader(f"File: {file.name}")
+        st.write(f"**File Size:** {file.size / 1024:.2f} KB")
+        st.write("**Preview:**")
         st.dataframe(df.head())
 
-        # Options for data cleaning
-        st.subheader(f"Data cleaning options for {file.name}")
+        # Data cleaning options
+        st.subheader(f"Data Cleaning for {file.name}")
+        
         if st.checkbox(f"Clean data for {file.name}"):
             col1, col2 = st.columns(2)
 
             with col1:
                 if st.button(f"Remove duplicates from {file.name}"):
                     df.drop_duplicates(inplace=True)
-                    st.write("Duplicates Removed!")
+                    st.write("✅ Duplicates removed!")
 
             with col2:
                 if st.button(f"Fill missing values for {file.name}"):
                     numeric_cols = df.select_dtypes(include=['number']).columns
                     df[numeric_cols] = df[numeric_cols].fillna(df[numeric_cols].mean())
-                    st.write("Missing values have been filled!")
+                    st.write("✅ Missing values filled with column mean!")
 
             # Select columns to keep
-            st.subheader("Select columns to keep")
-            columns = st.multiselect(f"Choose columns for {file.name}", df.columns, default=df.columns)
-            df = df[columns]
+            selected_columns = st.multiselect(f"Select columns to keep for {file.name}", df.columns, default=df.columns)
+            df = df[selected_columns]
 
-            # Data visualization
-            st.subheader("Data Visualization")
-            if st.checkbox(f"Show visualization for {file.name}"):    
-                # Filter numeric columns from the dataframe
-                numeric_data = df.select_dtypes(include=['number'])
-                if not numeric_data.empty:
-                    # Choose the first 2 columns (or adjust as necessary) to plot
-                    st.bar_chart(numeric_data.iloc[:, :2])  # You can change how many columns to display
-                else:
-                    st.warning("No numeric data available for visualization.")
+        # Data visualization
+        st.subheader(f"Data Visualization for {file.name}")
+        if st.checkbox(f"Show visualization for {file.name}"):
+            numeric_data = df.select_dtypes(include=['number'])
+            if not numeric_data.empty:
+                try:
+                    st.bar_chart(numeric_data)
+                except Exception as e:
+                    st.error(f"Error displaying chart: {e}")
+            else:
+                st.warning("No numeric data available for visualization.")
 
-            # Conversion options
-            st.subheader("Conversion Options")
-            conversion_type = st.radio(f"Convert {file.name} to:", ["CSV", "Excel"], key=file.name)
+        # Conversion options
+        st.subheader(f"Convert {file.name}")
+        conversion_type = st.radio(f"Convert {file.name} to:", ["CSV", "Excel"], key=file.name)
 
-            # Define the buffer for file conversion
+        # Convert and download
+        if st.button(f"Convert and Download {file.name}"):
             buffer = io.BytesIO()
+            new_file_name = file.name.replace(file_ext, f".{conversion_type.lower()}")
+            mime_type = ""
 
-            # Ensure this block is inside the 'if st.button()' check
-        if st.button(f"Convert {file.name}"):
-            buffer = io.BytesIO()  # Ensure buffer is initialized properly
+            try:
+                if conversion_type == "CSV":
+                    df.to_csv(buffer, index=False)
+                    mime_type = "text/csv"
+                elif conversion_type == "Excel":
+                    df.to_excel(buffer, index=False, engine="openpyxl")
+                    mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
-    if conversion_type == 'CSV':
-        df.to_csv(buffer, index=False)
-        file_name = file.name.replace(file_ext, ".csv")
-        mime_type = "text/csv"
-
-    elif conversion_type == "Excel":
-        df.to_excel(buffer, index=False, engine="openpyxl")  # Ensure engine="openpyxl"
-        file_name = file.name.replace(file_ext, ".xlsx")
-        mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-    buffer.seek(0)  # Ensure buffer is at the beginning
-
-    # Provide download button
-    st.download_button(
-        label=f"Download {file.name} as {conversion_type}",
-        data=buffer,
-        file_name=file_name,
-        mime=mime_type
-    )
-
-    st.success(f"File '{file.name}' processed successfully!")
-
+                buffer.seek(0)
+                st.download_button(
+                    label=f"Download {new_file_name}",
+                    data=buffer,
+                    file_name=new_file_name,
+                    mime=mime_type
+                )
+                st.success(f"✅ {file.name} processed successfully!")
+            except Exception as e:
+                st.error(f"Error converting {file.name}: {e}")
